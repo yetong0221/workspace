@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-800 font-sans antialiased;
+    margin: 0;
+  }
+
+  #root {
+    @apply max-w-lg mx-auto min-h-dvh bg-white shadow-lg relative overflow-hidden;
+  }
+}
+
+@layer components {
+  /* 底部导航栏容器 */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-100 flex items-center justify-around py-2 px-4 z-50;
+    height: 64px;
+  }
+
+  .nav-item {
+    @apply flex flex-col items-center justify-center gap-0.5 text-xs text-gray-400 transition-colors duration-200;
+  }
+
+  .nav-item.active {
+    @apply text-purple-500;
+  }
+
+  .nav-item .nav-icon {
+    @apply text-xl leading-none;
+  }
+
+  /* Dashboard 卡片 */
+  .dash-card {
+    @apply rounded-2xl p-4 shadow-sm border border-gray-50 transition-shadow duration-200;
+  }
+
+  .dash-card:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  }
+
+  /* 取件码样式 */
+  .pickup-code {
+    @apply font-mono text-2xl font-bold tracking-[0.25em] text-center py-3 bg-gray-50 rounded-xl text-gray-800;
+  }
+}
+
+/* ====== AI 学习卡片动画 ====== */
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.3), 0 0 24px rgba(168, 85, 247, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.5), 0 0 40px rgba(168, 85, 247, 0.2);
+  }
+}
+
+@keyframes float-up {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-6px) rotate(6deg);
+    opacity: 1;
+  }
+}
+
+@keyframes float-delayed {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-4px) rotate(-4deg);
+    opacity: 0.8;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes slide-up-fade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sparkle-pop {
+  0%, 100% { transform: scale(0); opacity: 0; }
+  40% { transform: scale(1.2); opacity: 1; }
+  70% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.ai-glow {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+.ai-float-1 {
+  animation: float-up 2.5s ease-in-out infinite;
+}
+
+.ai-float-2 {
+  animation: float-delayed 3s ease-in-out infinite;
+}
+
+.ai-shimmer {
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255,255,255,0.4) 45%,
+    rgba(255,255,255,0.6) 50%,
+    rgba(255,255,255,0.4) 55%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 4s ease-in-out infinite;
+}
+
+.ai-card-enter {
+  animation: slide-up-fade 0.5s ease-out both;
+}
+
+/* 展开/收起过渡 */
+.ai-detail-enter {
+  animation: slide-up-fade 0.3s ease-out both;
+}
+
+/* 安全区域适配 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .bottom-nav {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+}
