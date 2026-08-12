@@ -29,28 +29,9 @@ const platformConfig: Record<string, { label: string; badge: string; gradient: s
 
 /* ====== 工具函数 ====== */
 
-/** 判断是否在移动端（用于决定唤起策略） */
-function isMobile(): boolean {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-}
-
-/** 尝试唤起 App，fallback 到网页 */
-function openLink(webUrl: string, appUrl: string) {
-  if (isMobile()) {
-    // 移动端：尝试唤起 App
-    const start = Date.now()
-    window.location.href = appUrl
-
-    // 2 秒后如果还在当前页面，说明 App 未安装或唤不起，跳转网页
-    setTimeout(() => {
-      if (Date.now() - start < 2200) {
-        window.open(webUrl, '_blank')
-      }
-    }, 2000)
-  } else {
-    // 桌面端：直接打开网页
-    window.open(webUrl, '_blank')
-  }
+/** 在新标签页中打开链接 */
+function openLink(url: string) {
+  window.open(url, '_blank')
 }
 
 /** 复制到剪贴板 */
@@ -88,15 +69,19 @@ export default function AIProjectCard({ project, onRefresh }: Props) {
   const cfg = platformConfig[project.platform] ?? platformConfig.bilibili
   const inTodo = isInTodo(project.id)
 
+  // 优先使用 Supabase 字段
+  const coverSrc = project.cover_url || project.cover
+  const linkUrl = project.video_url || project.webUrl
+
   /* ---- 换一换 ---- */
   const handleRefresh = () => {
     const next = getRandomProject(project.id)
     onRefresh(next)
   }
 
-  /* ---- 去 App 探索 ---- */
+  /* ---- 打开链接 ---- */
   const handleOpen = () => {
-    openLink(project.webUrl, project.appUrl)
+    window.open(linkUrl, '_blank')
   }
 
   /* ---- 复制链接 ---- */
@@ -148,20 +133,23 @@ export default function AIProjectCard({ project, onRefresh }: Props) {
                     shadow-sm border border-white/60 active:scale-[0.98] transition-transform duration-200`}
       >
         {/* ---- 封面图 ---- */}
-        <div className="relative w-full aspect-[4/3] bg-gray-100 overflow-hidden">
-          {/* 加载骨架屏 */}
-          {!imgLoaded && !imgError && (
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 animate-pulse" />
-          )}
-          {/* 错误占位 */}
-          {imgError ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 text-6xl">
+        <div className="relative w-full h-40 bg-gray-100 overflow-hidden">
+          {!coverSrc || imgError ? (
+            /* 无封面或加载失败 → 占位 */
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 text-5xl">
               {cfg.icon}
-              <span className="text-xs text-gray-400 mt-2">封面加载失败</span>
+              <span className="text-xs text-gray-400 mt-1">
+                {!coverSrc ? '暂无封面' : '封面加载失败'}
+              </span>
             </div>
-          ) : (
+          ) : !imgLoaded ? (
+            /* 加载中 → 骨架屏 */
+            <div className="absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 animate-pulse" />
+          ) : null}
+          {/* 封面图（仅当有 URL 且未报错时才渲染，避免 src="" 警告） */}
+          {coverSrc && !imgError && (
             <img
-              src={project.cover}
+              src={coverSrc}
               alt={project.title}
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
@@ -170,24 +158,21 @@ export default function AIProjectCard({ project, onRefresh }: Props) {
               }`}
             />
           )}
-
           {/* 封面上的平台徽章 */}
-          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          <div className="absolute top-3 right-3">
             <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold shadow-sm backdrop-blur-sm ${cfg.badge}`}>
               {cfg.icon} {cfg.label}
-            </span>
-          </div>
-
-          {/* 标签 */}
-          <div className="absolute bottom-3 left-3">
-            <span className="text-[10px] bg-white/80 backdrop-blur-sm text-gray-600 px-2.5 py-1 rounded-full font-medium shadow-sm">
-              {project.tag}
             </span>
           </div>
         </div>
 
         {/* ---- 文字内容区 ---- */}
         <div className="p-4 space-y-3">
+          {/* 标签 */}
+          <span className="inline-block text-[10px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full font-medium">
+            {project.tag}
+          </span>
+
           {/* 标题 */}
           <h3 className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2">
             {project.title}
@@ -212,7 +197,7 @@ export default function AIProjectCard({ project, onRefresh }: Props) {
                 <polyline points="15 3 21 3 21 9" />
                 <line x1="10" y1="14" x2="21" y2="3" />
               </svg>
-              去 App 探索
+              去探索
             </button>
 
             {/* 复制链接 */}
