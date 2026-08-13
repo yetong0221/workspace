@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import PickupCard from './PickupCard'
 import AIProjectCard from './AIProjectCard'
 import { getTodayHealthTip } from '../data/healthTips'
-import { aiProjects } from '../data/aiProjectsData'
 import type { AIProject, Platform } from '../data/aiProjectsData'
 import supabase from '../lib/supabase'
 
@@ -59,27 +58,44 @@ export default function Dashboard() {
   // 当日健康贴士（本地 Mock）
   const todayTip = useMemo(() => getTodayHealthTip(), [])
 
-  // AI 项目状态：从 Supabase 拉取多条，失败则降级 Mock
-  const [cloudProjects, setCloudProjects] = useState<AIProject[]>([])
+  // AI 项目状态：仅使用 Supabase 真实数据
+  const [projects, setProjects] = useState<AIProject[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
-  /** 从 Supabase 获取爆款列表（多条，供「换一换」切换） */
+  /** 从 Supabase 获取爆款列表（仅真实数据，无本地 Mock 兜底） */
   const fetchFromSupabase = useCallback(async () => {
     setLoading(true)
+    setError(false)
 
     try {
       const { data, error } = await supabase
         .from('ai_trending_posts')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(50)
 
       if (error) throw error
-      setCloudProjects((data ?? []).map(mapRowToProject))
+
+      // 映射并按链接去重（数据库可能存在历史重复行）
+      const seen = new Set<string>()
+      const deduped: AIProject[] = []
+      for (const row of (data ?? []) as Record<string, unknown>[]) {
+        const p = mapRowToProject(row)
+        const key = p.video_url || p.webUrl || p.appUrl
+        if (key && seen.has(key)) continue
+        if (key) seen.add(key)
+        deduped.push(p)
+      }
+
+      setProjects(deduped)
+      setCurrentIndex(0)
     } catch (err) {
-      console.error('❌ Supabase 查询失败，降级到本地 Mock:', err)
-      setCloudProjects([])
+      console.error('❌ Supabase 查询失败:', err)
+      setError(true)
+      setProjects([])
+      setCurrentIndex(0)
     } finally {
       setLoading(false)
     }
@@ -89,19 +105,6 @@ export default function Dashboard() {
   useEffect(() => {
     fetchFromSupabase()
   }, [fetchFromSupabase])
-
-  // 合并展示池：云端数据在前，本地 Mock 补齐（按链接去重），保证「换一换」始终有内容可切
-  const projects = useMemo(() => {
-    const seen = new Set<string>()
-    const merged: AIProject[] = []
-    for (const p of [...cloudProjects, ...aiProjects]) {
-      const key = p.video_url || p.webUrl || p.appUrl || p.title
-      if (seen.has(key)) continue
-      seen.add(key)
-      merged.push(p)
-    }
-    return merged
-  }, [cloudProjects])
 
   // 当前展示项目
   const project = projects[currentIndex] ?? null
@@ -164,7 +167,31 @@ export default function Dashboard() {
           total={projects.length}
           onRefresh={handleRefresh}
         />
-      ) : null}
+      ) : (
+        /* 无数据 / 加载失败的空状态 */
+        <div className="ai-card-enter">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-800 flex items-center gap-1.5">
+              🤖 每日 AI 爆款玩法
+            </h2>
+          </div>
+          <div className="rounded-2xl bg-gray-50 border border-gray-100 p-8 text-center">
+            <p className="text-3xl mb-2">{error ? '⚠️' : '🔍'}</p>
+            <p className="text-sm text-gray-400">
+              {error ? '内容加载失败，请稍后重试' : '暂无内容，稍后再来看看～'}
+            </p>
+            {error && (
+              <button
+                onClick={fetchFromSupabase}
+                className="mt-4 text-xs text-purple-400 bg-purple-50 hover:bg-purple-100
+                           px-4 py-2 rounded-full font-medium transition-colors"
+              >
+                重新加载
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ---- 每日健康贴士 ---- */}
       <div>
