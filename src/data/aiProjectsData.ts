@@ -1,4 +1,4 @@
-export type Platform = 'bilibili' | 'xiaohongshu' | 'douyin'
+export type Platform = 'bilibili' | 'xiaohongshu' | 'douyin' | 'github' | 'v2ex' | 'sspai'
 
 export interface AIProject {
   id: number

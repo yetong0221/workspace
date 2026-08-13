@@ -1,38 +1,56 @@
-import { useState } from 'react'
 import type { AIProject } from '../data/aiProjectsData'
-import { getRandomProject } from '../data/aiProjectsData'
 import { useToast } from './Toast'
 import { useTodos } from '../hooks/useTodos'
 
 /* ====== 平台配置 ====== */
 
-const platformConfig: Record<string, { label: string; badge: string; gradient: string; icon: string }> = {
+interface PlatformStyle {
+  label: string
+  badge: string
+  gradient: string
+  icon: string
+}
+
+const platformConfig: Record<string, PlatformStyle> = {
   bilibili: {
     label: 'B站',
     badge: 'bg-pink-100 text-pink-600',
-    gradient: 'from-pink-400/20 via-rose-200/30 to-macaron-pink/50',
+    gradient: 'from-pink-50 via-white to-rose-50',
     icon: '📺',
+  },
+  github: {
+    label: 'GitHub',
+    badge: 'bg-gray-800 text-white',
+    gradient: 'from-slate-100 via-white to-slate-50',
+    icon: '🐙',
+  },
+  sspai: {
+    label: '少数派',
+    badge: 'bg-orange-100 text-orange-600',
+    gradient: 'from-orange-50 via-white to-amber-50',
+    icon: '🔖',
+  },
+  v2ex: {
+    label: 'V2EX',
+    badge: 'bg-blue-100 text-blue-600',
+    gradient: 'from-blue-50 via-white to-sky-50',
+    icon: '💬',
   },
   xiaohongshu: {
     label: '小红书',
     badge: 'bg-red-100 text-red-600',
-    gradient: 'from-red-400/20 via-rose-200/30 to-macaron-peach/50',
+    gradient: 'from-red-50 via-white to-rose-50',
     icon: '📕',
   },
   douyin: {
     label: '抖音',
     badge: 'bg-gray-800 text-gray-100',
-    gradient: 'from-gray-400/20 via-slate-200/30 to-gray-100/50',
+    gradient: 'from-gray-100 via-white to-slate-50',
     icon: '🎵',
   },
 }
 
 /* ====== 工具函数 ====== */
-
-/** 在新标签页中打开链接 */
-function openLink(url: string) {
-  window.open(url, '_blank')
-}
 
 /** 复制到剪贴板 */
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -57,36 +75,36 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 interface Props {
   project: AIProject
-  onRefresh: (next: AIProject) => void
+  /** 当前展示索引（0 起），用于「n/N」提示 */
+  index: number
+  /** 候选总数 */
+  total: number
+  /** 切换到下一条 */
+  onRefresh: () => void
 }
 
-export default function AIProjectCard({ project, onRefresh }: Props) {
+export default function AIProjectCard({ project, index, total, onRefresh }: Props) {
   const toast = useToast()
   const { addTodo, isInTodo } = useTodos()
-  const [imgLoaded, setImgLoaded] = useState(false)
-  const [imgError, setImgError] = useState(false)
 
   const cfg = platformConfig[project.platform] ?? platformConfig.bilibili
   const inTodo = isInTodo(project.id)
 
-  // 优先使用 Supabase 字段
-  const coverSrc = project.cover_url || project.cover
-  const linkUrl = project.video_url || project.webUrl
-
-  /* ---- 换一换 ---- */
-  const handleRefresh = () => {
-    const next = getRandomProject(project.id)
-    onRefresh(next)
-  }
+  // 跳转链接：优先 Supabase 的 video_url
+  const linkUrl = project.video_url || project.webUrl || project.appUrl
 
   /* ---- 打开链接 ---- */
   const handleOpen = () => {
+    if (!linkUrl) {
+      toast.show('暂无可用链接', '⚠️')
+      return
+    }
     window.open(linkUrl, '_blank')
   }
 
   /* ---- 复制链接 ---- */
   const handleCopy = async () => {
-    const ok = await copyToClipboard(project.webUrl)
+    const ok = await copyToClipboard(linkUrl)
     if (ok) {
       toast.show('链接已复制，快去分享给朋友吧 ✨', '🔗')
     } else {
@@ -113,84 +131,74 @@ export default function AIProjectCard({ project, onRefresh }: Props) {
         <h2 className="font-semibold text-gray-800 flex items-center gap-1.5">
           🤖 每日 AI 爆款玩法
         </h2>
-        <button
-          onClick={handleRefresh}
-          className="flex items-center gap-1 text-xs text-purple-400 bg-purple-50
-                     hover:bg-purple-100 active:scale-95 px-3 py-1.5 rounded-full
-                     transition-all duration-200 font-medium"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
-          换一换
-        </button>
+        <div className="flex items-center gap-2">
+          {total > 1 && (
+            <span className="text-[10px] text-gray-400 tabular-nums">
+              {index + 1}/{total}
+            </span>
+          )}
+          <button
+            onClick={onRefresh}
+            className="flex items-center gap-1 text-xs text-purple-400 bg-purple-50
+                       hover:bg-purple-100 active:scale-95 px-3 py-1.5 rounded-full
+                       transition-all duration-200 font-medium"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            换一换
+          </button>
+        </div>
       </div>
 
-      {/* ---- 卡片主体 ---- */}
+      {/* ---- 卡片主体（纯文字） ---- */}
       <div
-        className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${cfg.gradient}
-                    shadow-sm border border-white/60 active:scale-[0.98] transition-transform duration-200`}
+        key={project.id}
+        className={`ai-card-enter relative rounded-2xl overflow-hidden border border-white/70
+                    bg-gradient-to-br ${cfg.gradient} shadow-sm`}
       >
-        {/* ---- 封面图 ---- */}
-        <div className="relative w-full h-40 bg-gray-100 overflow-hidden">
-          {!coverSrc || imgError ? (
-            /* 无封面或加载失败 → 占位 */
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 text-5xl">
-              {cfg.icon}
-              <span className="text-xs text-gray-400 mt-1">
-                {!coverSrc ? '暂无封面' : '封面加载失败'}
-              </span>
-            </div>
-          ) : !imgLoaded ? (
-            /* 加载中 → 骨架屏 */
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 animate-pulse" />
-          ) : null}
-          {/* 封面图（仅当有 URL 且未报错时才渲染，避免 src="" 警告） */}
-          {coverSrc && !imgError && (
-            <img
-              src={coverSrc}
-              alt={project.title}
-              onLoad={() => setImgLoaded(true)}
-              onError={() => setImgError(true)}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-                imgLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-          )}
-          {/* 封面上的平台徽章 */}
-          <div className="absolute top-3 right-3">
-            <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold shadow-sm backdrop-blur-sm ${cfg.badge}`}>
-              {cfg.icon} {cfg.label}
-            </span>
-          </div>
+        {/* 装饰柔光斑 */}
+        <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/60 blur-2xl" />
+        <div className="pointer-events-none absolute -left-12 -bottom-12 h-40 w-40 rounded-full bg-white/50 blur-3xl" />
+        {/* 超大平台图标水印 */}
+        <div className="pointer-events-none absolute right-2 bottom-1 text-8xl leading-none opacity-[0.08] select-none">
+          {cfg.icon}
         </div>
 
-        {/* ---- 文字内容区 ---- */}
-        <div className="p-4 space-y-3">
-          {/* 标签 */}
-          <span className="inline-block text-[10px] bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full font-medium">
-            {project.tag}
-          </span>
+        <div className="relative p-5">
+          {/* 顶行：平台徽章 + 标签 */}
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-semibold shadow-sm ${cfg.badge}`}>
+              <span>{cfg.icon}</span>
+              <span>{cfg.label}</span>
+            </span>
+            <span className="text-[11px] font-medium text-gray-500 bg-white/80 backdrop-blur-sm px-2.5 py-1 rounded-full">
+              {project.tag}
+            </span>
+          </div>
 
           {/* 标题 */}
-          <h3 className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2">
+          <h3 className="text-base font-bold text-gray-800 leading-snug">
             {project.title}
           </h3>
 
-          {/* 亮点描述 */}
-          <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
+          {/* 摘要 */}
+          <p className="mt-2.5 text-xs text-gray-500 leading-relaxed line-clamp-3">
             {project.highlights}
           </p>
 
+          {/* 分隔线 */}
+          <div className="mt-4 h-px bg-gradient-to-r from-transparent via-gray-200/70 to-transparent" />
+
           {/* ---- 操作按钮组 ---- */}
-          <div className="flex items-center gap-2 pt-1">
-            {/* 主按钮：去 App 探索 */}
+          <div className="mt-4 flex items-center gap-2">
+            {/* 主按钮：去探索 */}
             <button
               onClick={handleOpen}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl
-                         bg-purple-400 text-white text-xs font-medium
-                         hover:bg-purple-500 active:scale-[0.97] transition-all duration-200 shadow-sm"
+                         bg-gradient-to-r from-purple-400 to-pink-400 text-white text-xs font-semibold
+                         hover:from-purple-500 hover:to-pink-500 active:scale-[0.97] transition-all duration-200 shadow-sm"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
