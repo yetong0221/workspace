@@ -154,7 +154,7 @@ export default function AIProjectCard({ project, index, total, onRefresh }: Prop
 
       {/* ---- 卡片主体（纯文字） ---- */}
       <div
-        key={project.id}
+        key={linkUrl || String(project.id)}
         className={`ai-card-enter relative rounded-2xl overflow-hidden border border-white/70
                     bg-gradient-to-br ${cfg.gradient} shadow-sm`}
       >

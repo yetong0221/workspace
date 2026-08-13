@@ -60,7 +60,7 @@ export default function Dashboard() {
   const todayTip = useMemo(() => getTodayHealthTip(), [])
 
   // AI 项目状态：从 Supabase 拉取多条，失败则降级 Mock
-  const [projects, setProjects] = useState<AIProject[]>([])
+  const [cloudProjects, setCloudProjects] = useState<AIProject[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
@@ -76,21 +76,10 @@ export default function Dashboard() {
         .limit(20)
 
       if (error) throw error
-
-      if (data && data.length > 0) {
-        setProjects(data.map(mapRowToProject))
-        setCurrentIndex(0)
-        return
-      }
-
-      // 数据库为空 → 降级本地 Mock
-      console.info('📭 Supabase 表中暂无数据，使用本地 Mock')
-      setProjects(aiProjects)
-      setCurrentIndex(0)
+      setCloudProjects((data ?? []).map(mapRowToProject))
     } catch (err) {
       console.error('❌ Supabase 查询失败，降级到本地 Mock:', err)
-      setProjects(aiProjects)
-      setCurrentIndex(0)
+      setCloudProjects([])
     } finally {
       setLoading(false)
     }
@@ -100,6 +89,19 @@ export default function Dashboard() {
   useEffect(() => {
     fetchFromSupabase()
   }, [fetchFromSupabase])
+
+  // 合并展示池：云端数据在前，本地 Mock 补齐（按链接去重），保证「换一换」始终有内容可切
+  const projects = useMemo(() => {
+    const seen = new Set<string>()
+    const merged: AIProject[] = []
+    for (const p of [...cloudProjects, ...aiProjects]) {
+      const key = p.video_url || p.webUrl || p.appUrl || p.title
+      if (seen.has(key)) continue
+      seen.add(key)
+      merged.push(p)
+    }
+    return merged
+  }, [cloudProjects])
 
   // 当前展示项目
   const project = projects[currentIndex] ?? null
