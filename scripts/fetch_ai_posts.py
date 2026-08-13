@@ -68,6 +68,15 @@ session.headers.update({
 })
 REQUEST_TIMEOUT = 15  # 秒
 
+# B站内容的 AI/科技 关键词（用于过滤，避免误匹配）
+AI_ZH_KEYWORDS = [
+    "人工智能", "大模型", "机器学习", "深度学习", "神经网络", "智能体",
+    "机器人", "自动驾驶", "视频生成", "文生图", "文生视频", "脑机接口",
+    "智能",
+    "gpt", "llm", "deepseek", "chatgpt", "claude", "copilot", "cursor",
+    "sora", "midjourney", "stable diffusion", "aigc", "openai",
+]
+
 
 # ============================================================
 #  辅助函数
@@ -87,39 +96,49 @@ def now_iso() -> str:
 
 def fetch_bilibili_popular() -> list[dict[str, Any]]:
     """
-    B站热门（RSSHub）→ 提取科技/AI 相关视频。
+    B站科技/知识分区排行榜 → 提取 AI 相关视频。
+    rid=188（科技）、rid=36（知识）。
     """
     candidates: list[dict[str, Any]] = []
-    urls = [
-        "https://rsshub.app/bilibili/popular/all",
-        "https://rsshub.rssforever.com/bilibili/popular/all",
-    ]
-    for url in urls:
+
+    for rid in (188, 36):
+        url = f"https://api.bilibili.com/x/web-interface/ranking/v2?rid={rid}&type=all"
         try:
-            resp = session.get(url, timeout=REQUEST_TIMEOUT)
+            resp = session.get(
+                url,
+                timeout=REQUEST_TIMEOUT,
+                headers={"Referer": "https://www.bilibili.com/"},
+            )
             resp.raise_for_status()
-            feed = feedparser.parse(resp.content)
-            for entry in feed.entries[:15]:
-                title = entry.get("title", "")
-                link = entry.get("link", "")
-                desc = entry.get("summary", "") or entry.get("description", "")
-                # 尝试提取封面
-                cover = ""
-                if "media_thumbnail" in entry:
-                    cover = entry.media_thumbnail[0].get("url", "")
+            data = resp.json()
+            if data.get("code") != 0:
+                continue
+            for v in data.get("data", {}).get("list", [])[:30]:
+                title = v.get("title", "")
+                desc = v.get("desc", "")
+                text = f"{title} {desc}".lower()
+                if not any(kw in text for kw in AI_ZH_KEYWORDS):
+                    continue
+                bvid = v.get("bvid", "")
+                if not bvid:
+                    continue
+                pic = v.get("pic", "") or ""
+                if pic.startswith("//"):
+                    pic = "https:" + pic
+                link = f"https://www.bilibili.com/video/{bvid}"
                 candidates.append({
                     "id": stable_id(link),
                     "title": title,
                     "platform": "bilibili",
-                    "cover_url": cover,
+                    "cover_url": pic,
                     "video_url": link,
-                    "summary": desc[:300] if desc else "",
+                    "summary": (desc or title)[:300],
                     "tag": "#AI科技",
                 })
-            log.info("  ✅ B站 RSS  获得 %d 条", len(candidates))
-            break
         except Exception as exc:
-            log.warning("  ⚠️ B站 RSS 失败 (%s): %s", url, exc)
+            log.warning("  ⚠️ B站分区榜 rid=%s 失败: %s", rid, exc)
+
+    log.info("  ✅ B站分区榜 获得 %d 条", len(candidates))
     return candidates
 
 
@@ -410,6 +429,22 @@ def fetch_existing_urls() -> set[str]:
         return set()
 
 
+def fetch_existing_platforms() -> dict[str, int]:
+    """统计各平台已入库数量，用于轮换补全、避免单一平台刷屏。"""
+    try:
+        result = supabase.table("ai_trending_posts").select("platform").execute()
+        rows = getattr(result, "data", None) or []
+        counts: dict[str, int] = {}
+        for r in rows:
+            p = (r.get("platform") or "").strip()
+            if p:
+                counts[p] = counts.get(p, 0) + 1
+        return counts
+    except Exception as exc:
+        log.warning("  ⚠️ 查询平台分布失败: %s", exc)
+        return {}
+
+
 def insert_to_supabase(post: dict[str, Any]) -> bool:
     """
     将筛选结果插入 ai_trending_posts 表。
@@ -452,7 +487,7 @@ def main() -> None:
         log.error("❌ 所有数据源均抓取失败，终止")
         sys.exit(1)
 
-    # 1.5 过滤已入库的 URL，避免重复写入
+    # 2. 过滤已入库的 URL，避免重复写入
     existing_urls = fetch_existing_urls()
     fresh = [c for c in candidates if c["video_url"] not in existing_urls]
     if not fresh:
@@ -460,13 +495,25 @@ def main() -> None:
         return
     log.info("🔍 排除 %d 条已入库，剩余 %d 条新候选", len(candidates) - len(fresh), len(fresh))
 
-    # 2. DeepSeek 筛选
-    curated = deepseek_curate(fresh)
+    # 3. 轮换目标平台：优先补全已入库最少的平台，保证内容丰富多样
+    platform_counts = fetch_existing_platforms()
+    available = sorted({c["platform"] for c in fresh},
+                       key=lambda p: (platform_counts.get(p, 0), p))
+    if not available:
+        log.info("🎉 候选内容均已入库，本次无需新增")
+        return
+    target = available[0]
+    platform_candidates = [c for c in fresh if c["platform"] == target]
+    log.info("🎯 本次目标平台：%s（已入库 %d 条，新候选 %d 条）",
+             target, platform_counts.get(target, 0), len(platform_candidates))
+
+    # 4. DeepSeek 筛选
+    curated = deepseek_curate(platform_candidates)
     if not curated:
         log.error("❌ DeepSeek 筛选失败，终止")
         sys.exit(1)
 
-    # 3. 入库
+    # 5. 入库
     success = insert_to_supabase(curated)
     if not success:
         log.error("❌ 入库失败")
