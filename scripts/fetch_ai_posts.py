@@ -147,7 +147,11 @@ def fetch_github_trending() -> list[dict[str, Any]]:
 
             for repo in items[:10]:
                 name = repo.get("name") or repo.get("full_name") or repo.get("title", "")
-                url_repo = repo.get("url") or repo.get("html_url") or f"https://github.com/{name}"
+                full_name = repo.get("full_name") or ""
+                # 跳转链接必须使用 html_url（网页地址），绝不能使用 API 的 url 字段
+                url_repo = repo.get("html_url") or (
+                    f"https://github.com/{full_name}" if full_name else f"https://github.com/{name}"
+                )
                 desc = repo.get("description") or repo.get("desc") or ""
                 lang = repo.get("language") or ""
                 stars = repo.get("stars") or repo.get("stargazers_count") or 0
