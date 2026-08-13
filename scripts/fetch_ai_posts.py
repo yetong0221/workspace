@@ -399,6 +399,17 @@ def deepseek_curate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
 # ============================================================
 #  入库 Supabase
 # ============================================================
+def fetch_existing_urls() -> set[str]:
+    """查询已入库的 video_url，用于跨次运行去重。"""
+    try:
+        result = supabase.table("ai_trending_posts").select("video_url").execute()
+        rows = getattr(result, "data", None) or []
+        return {r.get("video_url", "") for r in rows if r.get("video_url")}
+    except Exception as exc:
+        log.warning("  ⚠️ 查询已入库数据失败，本次跳过去重: %s", exc)
+        return set()
+
+
 def insert_to_supabase(post: dict[str, Any]) -> bool:
     """
     将筛选结果插入 ai_trending_posts 表。
@@ -441,8 +452,16 @@ def main() -> None:
         log.error("❌ 所有数据源均抓取失败，终止")
         sys.exit(1)
 
+    # 1.5 过滤已入库的 URL，避免重复写入
+    existing_urls = fetch_existing_urls()
+    fresh = [c for c in candidates if c["video_url"] not in existing_urls]
+    if not fresh:
+        log.info("🎉 候选内容均已入库，本次无需新增")
+        return
+    log.info("🔍 排除 %d 条已入库，剩余 %d 条新候选", len(candidates) - len(fresh), len(fresh))
+
     # 2. DeepSeek 筛选
-    curated = deepseek_curate(candidates)
+    curated = deepseek_curate(fresh)
     if not curated:
         log.error("❌ DeepSeek 筛选失败，终止")
         sys.exit(1)
